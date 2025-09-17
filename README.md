@@ -2,9 +2,8 @@
 
 AWS CloudWatch Interface is an open-source starter kit that lets teams deploy a secure CloudWatch Logs explorer, REST surface, and Model Context Protocol (MCP) adapter without shipping sensitive data outside their AWS account. The project is designed for rapid deployment on Vercel (or similar serverless hosts) with Supabase as the persistence layer.
 
-> 📄 Refer to [`PRD.md`](./PRD.md) for the detailed product requirements and roadmap.
 
-## Repository Layout (M0 Scaffold)
+## Repository Layout
 
 ```
 aws-cloudwatch-interface/
@@ -19,7 +18,6 @@ aws-cloudwatch-interface/
 │   └── README.md      # Supabase setup instructions (coming soon)
 ├── .gitignore
 ├── LICENSE (MIT)
-├── PRD.md
 └── README.md
 ```
 
