@@ -34,6 +34,13 @@ function createClientMock() {
   };
   const selectSaved = vi.fn().mockReturnValue(savedSelectBuilder);
 
+  const historyRange = vi.fn().mockResolvedValue({ data: [], error: null });
+  const historySelectBuilder = {
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnValue({ range: historyRange }),
+  };
+  const selectHistory = vi.fn().mockReturnValue(historySelectBuilder);
+
   const deleteSavedFinal = vi.fn().mockResolvedValue({ error: null });
   const deleteSavedSecond = vi.fn().mockImplementation(() => deleteSavedFinal());
   const deleteSavedFirst = vi.fn().mockReturnValue({ eq: deleteSavedSecond });
@@ -66,6 +73,10 @@ function createClientMock() {
           select: selectSaved,
           delete: deleteSaved,
         } as unknown as ReturnType<SupabaseClient['from']>;
+      case 'query_history':
+        return {
+          select: selectHistory,
+        } as unknown as ReturnType<SupabaseClient['from']>;
       case 'profiles':
         return { select: profileSelect } as unknown as ReturnType<SupabaseClient['from']>;
       default:
@@ -86,6 +97,7 @@ function createClientMock() {
     insertSavedSingle,
     selectSaved,
     selectProfileSingle,
+    historyRange,
   };
 }
 
@@ -156,5 +168,14 @@ describe('SupabaseRepository', () => {
     await repo.deleteSavedQuery('saved-1', 'user-1');
 
     expect(deleteSavedFinal).toHaveBeenCalledOnce();
+  });
+
+  it('lists query history with pagination', async () => {
+    const { client, historyRange } = createClientMock();
+    const repo = new SupabaseRepository(client);
+
+    await repo.listQueryHistory('user-1', { limit: 10, offset: 20 });
+
+    expect(historyRange).toHaveBeenCalledWith(20, 29);
   });
 });

@@ -1,14 +1,8 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/transport/node';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import {
-  CloudWatchService,
-  SupabaseRepository,
-  createCloudWatchServiceFromEnv,
-  createSupabaseAuthServiceFromEnv,
-  createSupabaseRepositoryFromEnv,
-} from '@aws-cloudwatch-interface/services';
+import { createCloudWatchServiceFromEnv, createSupabaseAuthServiceFromEnv, createSupabaseRepositoryFromEnv } from '@aws-cloudwatch-interface/services';
 
 const server = new McpServer({
   name: 'aws-cloudwatch-interface-mcp',
@@ -23,31 +17,36 @@ const authSchema = z.object({
   accessToken: z.string().min(1, 'accessToken is required'),
 });
 
-const listLogGroupsInput = authSchema.extend({
+const listLogGroupsInput = z.object({
+  accessToken: z.string().min(1, 'accessToken is required'),
   nextToken: z.string().optional(),
 });
 
-server.tool(
+type ListLogGroupsArgs = z.infer<typeof listLogGroupsInput>;
+
+server.registerTool(
   'list_log_groups',
   {
     description: 'List CloudWatch log groups available to the deployment. Requires Supabase access token.',
-    inputSchema: listLogGroupsInput,
+    inputSchema: listLogGroupsInput.shape,
   },
-  async ({ params }) => {
-    const input = listLogGroupsInput.parse(params);
+  async (args: ListLogGroupsArgs, _extra: unknown) => {
+    const input = listLogGroupsInput.parse(args);
     await authenticate(input.accessToken);
 
     const response = await cloudwatch.listLogGroups(input.nextToken);
+    const payload = {
+      logGroups: response.logGroups ?? [],
+      nextToken: response.nextToken ?? null,
+    };
     return {
       content: [
         {
-          type: 'json_schema',
-          data: {
-            logGroups: response.logGroups ?? [],
-            nextToken: response.nextToken ?? null,
-          },
+          type: 'text',
+          text: JSON.stringify(payload),
         },
       ],
+      _meta: { payload },
     };
   },
 );
@@ -62,14 +61,16 @@ const runQueryInput = authSchema.extend({
   maxPollAttempts: z.number().int().positive().max(100).optional(),
 });
 
-server.tool(
+type RunQueryArgs = z.infer<typeof runQueryInput>;
+
+server.registerTool(
   'run_logs_insights_query',
   {
     description: 'Execute a CloudWatch Logs Insights query and return results.',
-    inputSchema: runQueryInput,
+    inputSchema: runQueryInput.shape,
   },
-  async ({ params }) => {
-    const input = runQueryInput.parse(params);
+  async (args: RunQueryArgs, _extra: unknown) => {
+    const input = runQueryInput.parse(args);
     const user = await authenticate(input.accessToken);
 
     const history = await repository.createQueryHistory({
@@ -103,18 +104,20 @@ server.tool(
         cloudwatchQueryId: result.queryId,
       });
 
+      const payload = {
+        queryId: result.queryId,
+        status: result.status,
+        records: result.records,
+        statistics: result.statistics ?? null,
+      };
       return {
         content: [
           {
-            type: 'json_schema',
-            data: {
-              queryId: result.queryId,
-              status: result.status,
-              records: result.records,
-              statistics: result.statistics ?? null,
-            },
+            type: 'text',
+            text: JSON.stringify(payload),
           },
         ],
+        _meta: { payload },
       };
     } catch (error) {
       await repository.updateQueryHistory(history.id, {
@@ -128,24 +131,27 @@ server.tool(
 
 const listSavedQueriesInput = authSchema;
 
-server.tool(
+type ListSavedQueriesArgs = z.infer<typeof listSavedQueriesInput>;
+
+server.registerTool(
   'list_saved_queries',
   {
     description: 'List saved queries for the authenticated Supabase user.',
-    inputSchema: listSavedQueriesInput,
+    inputSchema: listSavedQueriesInput.shape,
   },
-  async ({ params }) => {
-    const input = listSavedQueriesInput.parse(params);
+  async (args: ListSavedQueriesArgs, _extra: unknown) => {
+    const input = listSavedQueriesInput.parse(args);
     const user = await authenticate(input.accessToken);
 
     const saved = await repository.listSavedQueries(user.id);
     return {
       content: [
         {
-          type: 'json_schema',
-          data: { saved },
+          type: 'text',
+          text: JSON.stringify({ saved }),
         },
       ],
+      _meta: { saved },
     };
   },
 );
@@ -158,14 +164,16 @@ const saveQueryInput = authSchema.extend({
   tags: z.array(z.string().min(1)).max(10).optional(),
 });
 
-server.tool(
+type SaveQueryArgs = z.infer<typeof saveQueryInput>;
+
+server.registerTool(
   'save_query',
   {
     description: 'Persist a saved query for the authenticated Supabase user.',
-    inputSchema: saveQueryInput,
+    inputSchema: saveQueryInput.shape,
   },
-  async ({ params }) => {
-    const input = saveQueryInput.parse(params);
+  async (args: SaveQueryArgs, _extra: unknown) => {
+    const input = saveQueryInput.parse(args);
     const user = await authenticate(input.accessToken);
 
     const saved = await repository.createSavedQuery({
@@ -180,10 +188,11 @@ server.tool(
     return {
       content: [
         {
-          type: 'json_schema',
-          data: { saved },
+          type: 'text',
+          text: JSON.stringify({ saved }),
         },
       ],
+      _meta: { saved },
     };
   },
 );
@@ -192,14 +201,16 @@ const deleteQueryInput = authSchema.extend({
   id: z.string().uuid(),
 });
 
-server.tool(
+type DeleteQueryArgs = z.infer<typeof deleteQueryInput>;
+
+server.registerTool(
   'delete_saved_query',
   {
     description: 'Delete a saved query owned by the authenticated user.',
-    inputSchema: deleteQueryInput,
+    inputSchema: deleteQueryInput.shape,
   },
-  async ({ params }) => {
-    const input = deleteQueryInput.parse(params);
+  async (args: DeleteQueryArgs, _extra: unknown) => {
+    const input = deleteQueryInput.parse(args);
     const user = await authenticate(input.accessToken);
 
     await repository.deleteSavedQuery(input.id, user.id);
@@ -210,6 +221,7 @@ server.tool(
           text: 'Deleted',
         },
       ],
+      _meta: { id: input.id },
     };
   },
 );

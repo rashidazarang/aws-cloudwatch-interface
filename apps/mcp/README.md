@@ -15,6 +15,7 @@ All tools require an `accessToken` parameter containing a Supabase JWT.
 ## Usage
 
 ```bash
+pnpm --filter @aws-cloudwatch-interface/services build
 pnpm --filter @aws-cloudwatch-interface/mcp build
 node apps/mcp/dist/index.js
 ```

@@ -60,6 +60,11 @@ interface LogIngestionOptions {
   retentionDays?: number;
 }
 
+export interface QueryHistoryListOptions {
+  limit?: number;
+  offset?: number;
+}
+
 export class SupabaseRepository {
   constructor(private readonly client: SupabaseClient) {}
 
@@ -159,6 +164,30 @@ export class SupabaseRepository {
     return data ?? [];
   }
 
+  async listQueryHistory(
+    userId: string,
+    options: QueryHistoryListOptions = {},
+  ): Promise<QueryHistoryRecord[]> {
+    const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
+    const offset = Math.max(options.offset ?? 0, 0);
+
+    const from = offset;
+    const to = offset + limit - 1;
+
+    const { data, error } = await this.client
+      .from('query_history')
+      .select()
+      .eq('requester_id', userId)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`Failed to list query history for user ${userId}: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
   async deleteSavedQuery(id: string, userId: string): Promise<void> {
     const { error } = await this.client
       .from('saved_queries')
@@ -179,9 +208,7 @@ export class SupabaseRepository {
     const deduped = deduplicateLogs(records);
 
     if (deduped.length > 0) {
-      const { error } = await this.client
-        .from('cloudwatch_logs')
-        .insert(deduped, { returning: 'minimal' });
+      const { error } = await this.client.from('cloudwatch_logs').insert(deduped);
 
       if (error) {
         throw new Error(`Failed to insert cloudwatch logs: ${error.message}`);

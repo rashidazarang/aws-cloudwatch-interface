@@ -2,6 +2,7 @@ import type {
   CloudWatchLogsClientConfig,
   DescribeLogGroupsCommandOutput,
   GetQueryResultsCommandOutput,
+  StartQueryCommandOutput,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
   CloudWatchLogsClient,
@@ -12,11 +13,7 @@ import {
 
 import type { LogQueryRequest, LogQueryResult, QueryExecutionOptions } from '../types.js';
 
-export interface CloudWatchLogsClientLike {
-  send<TInput extends object, TOutput>(command: {
-    readonly input: TInput;
-  }): Promise<TOutput>;
-}
+type CloudWatchLogsClientLike = Pick<CloudWatchLogsClient, 'send'>;
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_MAX_ATTEMPTS = 30;
@@ -33,10 +30,11 @@ export class CloudWatchService {
   private readonly sleep: SleepFn;
 
   constructor(options?: CloudWatchLogsClientConfig & { client?: CloudWatchLogsClientLike; sleepFn?: SleepFn }) {
-    if (options?.client) {
-      this.client = options.client;
+    const { client, ...clientOptions } = options ?? {};
+    if (client) {
+      this.client = client;
     } else {
-      this.client = new CloudWatchLogsClient(options);
+      this.client = new CloudWatchLogsClient(clientOptions as CloudWatchLogsClientConfig);
     }
 
     this.sleep = options?.sleepFn ?? defaultSleep;
@@ -44,7 +42,7 @@ export class CloudWatchService {
 
   async listLogGroups(nextToken?: string): Promise<DescribeLogGroupsCommandOutput> {
     const command = new DescribeLogGroupsCommand({ nextToken });
-    return this.client.send(command as never);
+    return this.client.send(command) as Promise<DescribeLogGroupsCommandOutput>;
   }
 
   async startQuery(request: LogQueryRequest): Promise<string> {
@@ -58,7 +56,7 @@ export class CloudWatchService {
       limit: request.limit,
     });
 
-    const response = await this.client.send(command as never);
+    const response = (await this.client.send(command)) as StartQueryCommandOutput;
     if (!response.queryId) {
       throw new Error('CloudWatch did not return a queryId');
     }
@@ -68,7 +66,7 @@ export class CloudWatchService {
 
   async getQueryResults(queryId: string): Promise<GetQueryResultsCommandOutput> {
     const command = new GetQueryResultsCommand({ queryId });
-    return this.client.send(command as never);
+    return this.client.send(command) as Promise<GetQueryResultsCommandOutput>;
   }
 
   async runQuery(

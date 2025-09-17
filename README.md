@@ -87,6 +87,7 @@ The Supabase schema enforces deduplication (`(log_group, timestamp, message)` un
 - `GET /api/saved-queries` – list saved queries scoped to the authenticated user.
 - `POST /api/saved-queries` – persist a saved query definition tied to the current user.
 - `DELETE /api/saved-queries/:id` – remove a saved query owned by the current user.
+- `GET /api/query-history` – fetch recent query runs for the authenticated user (supports limit/offset).
 
 Send `Authorization: Bearer <Supabase access token>` with each request. Tokens come from Supabase Auth sessions (e.g., magic-link login from the web UI). Agents can obtain JWTs via Supabase service integrations or Admin API.
 
@@ -96,6 +97,7 @@ Send `Authorization: Bearer <Supabase access token>` with each request. Tokens c
 - Log group browser with pagination and manual refresh.
 - Query form for selecting time ranges, executing Insights queries, and reviewing results inline.
 - Saved query list with quick load/delete actions and ad-hoc save support.
+- Query history timeline with lazy pagination so teams can audit previous runs.
 - Client calls the REST API with Supabase JWTs so your credentials never leave the deployment.
 
 ## MCP Adapter
@@ -106,7 +108,15 @@ The MCP adapter (under `apps/mcp`) mirrors the REST functionality for AI agents:
 - Each tool expects a Supabase `accessToken` parameter, ensuring consistent auth semantics with the REST layer.
 - Start the adapter via `pnpm --filter @aws-cloudwatch-interface/mcp build` followed by `node apps/mcp/dist/index.js`.
 
-Configuration mirrors the REST deployment (AWS credentials + Supabase keys). Future work will include helper scripts for minting tokens and registering the adapter with popular agent frameworks.
+Configuration mirrors the REST deployment (AWS credentials + Supabase keys). Build the shared services package before starting the adapter:
+
+```bash
+pnpm --filter @aws-cloudwatch-interface/services build
+pnpm --filter @aws-cloudwatch-interface/mcp build
+node apps/mcp/dist/index.js
+```
+
+Future work will include helper scripts for minting tokens and registering the adapter with popular agent frameworks.
 
 ## Supabase Setup
 

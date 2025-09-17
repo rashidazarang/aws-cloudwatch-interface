@@ -25,6 +25,16 @@ interface QueryResponse {
   statistics: Record<string, unknown> | null;
 }
 
+interface QueryHistoryEntry {
+  id: string;
+  log_group: string;
+  query_string: string;
+  created_at: string;
+  status: string;
+  result_row_count: number | null;
+  error_message: string | null;
+}
+
 function toInputValue(date: Date) {
   return date.toISOString().slice(0, 16);
 }
@@ -63,16 +73,25 @@ export function LogExplorer() {
   const [savedStatus, setSavedStatus] = useState<string | null>(null);
   const [savedError, setSavedError] = useState<string | null>(null);
 
+  const [queryHistory, setQueryHistory] = useState<QueryHistoryEntry[]>([]);
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyHasMore, setHistoryHasMore] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   useEffect(() => {
     if (!accessToken) {
       setLogGroups([]);
       setSelectedLogGroup('');
       setSavedQueries([]);
+      setQueryHistory([]);
+      setHistoryOffset(0);
+      setHistoryHasMore(true);
       return;
     }
 
     void loadLogGroups(accessToken);
     void loadSavedQueries(accessToken);
+    void loadQueryHistory(accessToken, { reset: true });
   }, [accessToken]);
 
   useEffect(() => {
@@ -130,6 +149,38 @@ export function LogExplorer() {
     }
   };
 
+  const loadQueryHistory = async (
+    token: string,
+    options: { reset?: boolean; offset?: number } = {},
+  ) => {
+    if (historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const offset = options.reset ? 0 : options.offset ?? historyOffset;
+      const limit = 10;
+      const response = await fetch(`/api/query-history?offset=${offset}&limit=${limit}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error ?? 'Failed to load query history');
+      }
+
+      const entries = (body.history ?? []) as QueryHistoryEntry[];
+      setQueryHistory((prev) => (options.reset ? entries : [...prev, ...entries]));
+      const nextOffset = offset + entries.length;
+      setHistoryOffset(nextOffset);
+      setHistoryHasMore(entries.length === limit);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const handleRunQuery = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!accessToken) return;
@@ -159,6 +210,9 @@ export function LogExplorer() {
       }
 
       setQueryResult(body);
+      if (accessToken) {
+        await loadQueryHistory(accessToken, { reset: true });
+      }
     } catch (error) {
       setQueryError((error as Error).message);
     } finally {
@@ -375,6 +429,38 @@ export function LogExplorer() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div className="query-history">
+            <h2>Query History</h2>
+            {queryHistory.length === 0 && <p>No history yet.</p>}
+            {queryHistory.length > 0 && (
+              <ul>
+                {queryHistory.map((entry) => (
+                  <li key={entry.id}>
+                    <div>
+                      <strong>{new Date(entry.created_at).toLocaleString()}</strong>
+                      <p>{entry.log_group}</p>
+                      <p className="query-text">{entry.query_string}</p>
+                    </div>
+                    <div className="history-meta">
+                      <span>Status: {entry.status}</span>
+                      <span>Rows: {entry.result_row_count ?? 0}</span>
+                      {entry.error_message && <span className="error">{entry.error_message}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {historyHasMore && (
+              <button
+                type="button"
+                disabled={historyLoading}
+                onClick={() => accessToken && loadQueryHistory(accessToken, { offset: historyOffset })}
+              >
+                {historyLoading ? 'Loading…' : 'Load more'}
+              </button>
+            )}
           </div>
         </div>
       )}
