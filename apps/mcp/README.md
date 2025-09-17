@@ -1,9 +1,33 @@
 # MCP Adapter
 
-This directory will contain the Model Context Protocol (MCP) adapter, exposing CloudWatch log access as agent-friendly tools. The adapter will:
+This package exposes CloudWatch log access via the Model Context Protocol (MCP). Agents call the adapter with Supabase access tokens, mirroring the authentication flow used by the REST API.
 
-- Authenticate clients using `MCP_SHARED_SECRET` and API tokens stored in Supabase.
-- Provide tools for listing log groups, executing CloudWatch Logs Insights queries, and returning cached results.
-- Mirror REST API limits, auditing every invocation into `query_history` and `audit_events`.
+## Features
 
-Implementation will begin in Milestone M3. For now, this placeholder establishes the package layout.
+- `list_log_groups` – lists log groups available to the deployment.
+- `run_logs_insights_query` – runs a Logs Insights query and returns records/statistics.
+- `list_saved_queries` – fetches saved queries owned by the authenticated user.
+- `save_query` – persists a saved query for reuse.
+- `delete_saved_query` – removes a saved query owned by the caller.
+
+All tools require an `accessToken` parameter containing a Supabase JWT.
+
+## Usage
+
+```bash
+pnpm --filter @aws-cloudwatch-interface/mcp build
+node apps/mcp/dist/index.js
+```
+
+When wiring into an MCP-compatible agent, configure environment variables identical to the REST deployment (`AWS_REGION`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, etc.). Agents must supply their Supabase access token when invoking tools, for example:
+
+```json
+{
+  "name": "list_log_groups",
+  "arguments": {
+    "accessToken": "<supabase_jwt>"
+  }
+}
+```
+
+Future milestones will include helper scripts for minting service tokens and registering the adapter with common agent frameworks.

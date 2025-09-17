@@ -98,6 +98,16 @@ Send `Authorization: Bearer <Supabase access token>` with each request. Tokens c
 - Saved query list with quick load/delete actions and ad-hoc save support.
 - Client calls the REST API with Supabase JWTs so your credentials never leave the deployment.
 
+## MCP Adapter
+
+The MCP adapter (under `apps/mcp`) mirrors the REST functionality for AI agents:
+
+- `list_log_groups`, `run_logs_insights_query`, `list_saved_queries`, `save_query`, and `delete_saved_query` tools.
+- Each tool expects a Supabase `accessToken` parameter, ensuring consistent auth semantics with the REST layer.
+- Start the adapter via `pnpm --filter @aws-cloudwatch-interface/mcp build` followed by `node apps/mcp/dist/index.js`.
+
+Configuration mirrors the REST deployment (AWS credentials + Supabase keys). Future work will include helper scripts for minting tokens and registering the adapter with popular agent frameworks.
+
 ## Supabase Setup
 
 1. Open the Supabase SQL editor (or connect via `psql`).
